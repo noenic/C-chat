@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include "client.h"
 
 
@@ -25,13 +26,15 @@ typedef struct channel
     int port;
     int socket;
     struct listeClients *listeClients;
+    pthread_mutex_t file_mutex;
 } channel;
 
 
 typedef struct listChannel
 {
     int nb_channels;
-    channel *channels;
+    struct channel** channels;
+    pthread_mutex_t listeClients_mutex;
 } listChannel;
 
 
@@ -78,10 +81,24 @@ channel *getChannelByName(const listChannel *listChannel,const char *name);
 */
 void create_channel_file(const channel *c);
 
-void write_message_to_channel_file(const channel *c, const char *message, const char *sender);
+
+/*
+    * Ecrit un message dans le fichier du channel
+    * @param channel : le channel
+    * @param message : le message à écrire dans le fichier
+    * @param sender : le nom de l'envoyeur du message
+*/
+void write_message_to_channel_file(channel *c, const char *message, const char *sender);
 
 
 
+/*
+    * retourne les 10 derniers messages du channel
+    * @param c : le channel
+    * @return char* : l'historique du channel
+*/
+
+char *read_channel_file(channel *c);
 
 
 

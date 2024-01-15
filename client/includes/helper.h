@@ -43,13 +43,29 @@ char* allouer_chaine_dynamique(int taille);
 char **allouer_liste_dynamique(int taille);
 void free_liste_dynamique(char **liste, int taille);
 
+
+/*
+    Fonction pour allouer dynamiquement un size_t
+    @param valeur: la valeur de l'entier
+    @return un pointeur vers l'entier alloué
+*/
+size_t* allouer_size_t_dynamique(int valeur);
+
+
 /*
     Reproduit la fonction getline de la librairie stdio.h mais retoure la chaîne de caractères sans le retour à la ligne
     @param size: un pointeur vers la taille de la chaîne de caractères
+    @note La valeur de size est modifiée par la fonction et contient la taille de la chaîne de caractères
     
 */
 char* get_line(size_t *size);
 
 
+/*
+    Fonction qui vérifie si le message est une commande
+    @param message: le message à vérifier
+    @return 0 si le message est une commande, 1 sinon
+*/
+int is_not_command(char* message,int sock);
 
 #endif // HELPER_H

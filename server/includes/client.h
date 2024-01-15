@@ -1,5 +1,6 @@
 #ifndef CLIENT_H
 #define CLIENT_H
+#include <pthread.h>
 #include "channels.h"
 /*
 
@@ -11,10 +12,10 @@
 
 
 
-typedef struct listeClients{
+typedef struct listeClients {
     int nbClients;
-    // On fait un tableau de pointeur
-    int* clients;
+    struct client** clients; 
+    pthread_mutex_t listeClients_mutex;
 } listeClients;
 
 
@@ -70,7 +71,7 @@ void client_disconnect(struct client *c, struct listeClients *listeClients);
     * @param listeClients La liste des clients
     * @note Va augmenter la taille de la liste des clients dynamiquement
 */
-void addClientTolist(struct client *client, struct listeClients *listeClients);
+void addClientToList(const client* c,listeClients* listeClients);
 
 /*
     * Supprime un client de la liste des clients
@@ -106,22 +107,11 @@ struct client *getClientBySocket(int socket, struct listeClients *listeClients);
 void sendToAllClientsInChannel(char *author, char *message,struct listeClients *listeClients);
 
 
-
-
-
-
 /*
-    * Déconnecte tous les clients
-    * @param listeClients La liste des clients
-    * @note Va fermer tous les sockets des clients et les supprimer de la liste des clients et les détruire
+    * Report une erreur aux clients si le serveur a rencontré une erreur avec un autre client
+    * @param client Le client qui a rencontré une erreur
 */
-void disconnet_all_clients(struct listeClients *listeClients);
-
-
-
-
-
-
+void error_report(struct client *client);
 
 
 

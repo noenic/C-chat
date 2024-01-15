@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include <unistd.h>
-#include "client.h"
 #include <string.h>
-#include "helper.h"
+#include "../includes/client.h"
+#include "../includes/helper.h"
 
 
 
@@ -11,9 +11,17 @@
 
 
 struct listeClients *initListeClients(){
-    struct listeClients *listeClients = malloc(sizeof(struct listeClients));
+    listeClients *listeClients = malloc(sizeof(struct listeClients));
+    if (pthread_mutex_init(&listeClients->listeClients_mutex, NULL) != 0) {
+        perror("Erreur lors de l'initialisation du mutex de la liste des clients");
+        return NULL;
+    }
     listeClients->nbClients = 0;
     listeClients->clients = malloc(sizeof(int));
+    if (listeClients->clients == NULL) {
+        perror("Erreur lors de l'allocation dynamique pour la liste des clients");
+        return NULL;
+    }
     return listeClients;
 }
 
@@ -26,7 +34,7 @@ struct listeClients *initListeClients(){
     * @return Le client créé
 */
 struct client *client_create(int socket){
-    struct client *client = malloc(sizeof(struct client));
+    client *client = malloc(sizeof(struct client));
     // par default le nom du client est son socket, il sera changé plus tard par le client
     client->name = malloc(sizeof(char) * sizeof(int)); 
     sprintf(client->name, "%d", socket);
@@ -44,7 +52,6 @@ struct client *client_create(int socket){
 void addNameToClient(struct client *client, char *name){
     client->name = malloc(strlen(name) * sizeof(char));
     strcpy(client->name, name);
-    printf("Le nom du client est %s\n", client->name);
 }
 
 
@@ -78,11 +85,30 @@ void client_disconnect(struct client *c, struct listeClients *listeClients){
     * @param listeClients La liste des clients
     * @note Va augmenter la taille de la liste des clients dynamiquement
 */
-void addClientTolist(struct client *client, struct listeClients *listeClients){
-    printf("L'adresse memoire du client est %p\n", client);
+void addClientToList(const client* c,listeClients* listeClients) {
+    // On ferme le mutex de la liste des clients
+    pthread_mutex_lock(&listeClients->listeClients_mutex);
+    // Augmente la taille du tableau de pointeurs
+    listeClients->clients = realloc(listeClients->clients, (listeClients->nbClients + 1) * sizeof(struct client*));
+
+    if (listeClients->clients == NULL) {
+        perror("Erreur lors de la réallocation de mémoire pour la liste des clients");
+        return;
+    }
+
+    // Alloue de la mémoire pour stocker un pointeur vers une structure client
+    listeClients->clients[listeClients->nbClients] = malloc(sizeof(struct client*));
+
+    if (listeClients->clients[listeClients->nbClients] == NULL) {
+        perror("Erreur lors de l'allocation de mémoire pour un client");
+        return;
+    }
+
+    // Stocke le pointeur vers la structure client donnée en paramètre
+    listeClients->clients[listeClients->nbClients] = (struct client*)c;
     listeClients->nbClients++;
-    listeClients->clients = realloc(listeClients->clients, listeClients->nbClients * sizeof(int));
-    listeClients->clients[listeClients->nbClients - 1] = &client;
+    // On ouvre le mutex de la liste des clients
+    pthread_mutex_unlock(&listeClients->listeClients_mutex);
 }
 
 
@@ -93,11 +119,15 @@ void addClientTolist(struct client *client, struct listeClients *listeClients){
     * @note Va réduire la taille de la liste des clients dynamiquement et detruires le client supprimé
 */
 void removeClientFromList(struct client *client, struct listeClients *listeClients) {
+    // On ferme le mutex de la liste des clients
+    pthread_mutex_lock(&listeClients->listeClients_mutex);
+    
     int i;
     for (i = 0; i < listeClients->nbClients; i++) {
-        if (listeClients->clients[i].socket == client->socket) {
+        if (listeClients->clients[i]->socket == client->socket) {
             // Libérer la mémoire du champ 'name' du client à supprimer
-            free(listeClients->clients[i].name);
+            free(listeClients->clients[i]->name);
+
 
             listeClients->nbClients--;
 
@@ -109,6 +139,8 @@ void removeClientFromList(struct client *client, struct listeClients *listeClien
             break;
         }
     }
+    // On ouvre le mutex de la liste des clients
+    pthread_mutex_unlock(&listeClients->listeClients_mutex);
 }
 
 
@@ -124,8 +156,8 @@ void removeClientFromList(struct client *client, struct listeClients *listeClien
 struct client *getClientByName(char *name, struct listeClients *listeClients){
     int i;
     for(i = 0; i < listeClients->nbClients; i++){
-        if(strcmp(listeClients->clients[i].name, name) == 0){
-            return &listeClients->clients[i];
+        if(strcmp(listeClients->clients[i]->name, name) == 0){
+            return listeClients->clients[i];
         }
     }
     return NULL;
@@ -139,11 +171,10 @@ struct client *getClientByName(char *name, struct listeClients *listeClients){
     * @return Le client
 */
 struct client *getClientBySocket(int socket, struct listeClients *listeClients){
-    // return NULL;
     int i;
     for(i = 0; i < listeClients->nbClients; i++){
-        if(listeClients->clients[i].socket == socket){
-            return &listeClients->clients[i];
+        if(listeClients->clients[i]->socket == socket){
+            return listeClients->clients[i];
         }
     }
     return NULL;
@@ -158,45 +189,32 @@ struct client *getClientBySocket(int socket, struct listeClients *listeClients){
     * @param listeClients La liste des clients
     * @note Le message sera envoyé à tous les clients du channel sauf l'auteur
     * @note On utilise utilise pas le type client car le serveur peut aussi envoyé des messages 
-    * @note Si channel est NULL, le message sera envoyé à tous les clients
 */
 void sendToAllClientsInChannel(char *author, char *message,struct listeClients *listeClients){
     // [Auteur] : message
     char *msg = malloc(sizeof(char) * (strlen(author) + strlen(message) + 4));
     sprintf(msg, "[%s] : %s", author, message);
     int i;
-    size_t size = strlen(msg);
-
+    size_t size = strlen(msg)+1;
     //On n'enverra pas le message à l'auteur
     for(i = 0; i < listeClients->nbClients; i++){
-        if(strcmp(listeClients->clients[i].name, author) != 0){
+        if(strcmp(listeClients->clients[i]->name, author) != 0){
             // On envoie la taille du message et ensuite le message
-            write(listeClients->clients[i].socket, &size, sizeof(size_t));
-            write(listeClients->clients[i].socket, msg, strlen(msg));
+            write(listeClients->clients[i]->socket, &size, sizeof(size_t));
+            write(listeClients->clients[i]->socket, msg, size);
         }
     }
     free(msg);
-
-
 }
 
 
-/*
-    * Déconnecte tous les clients
-    * @param listeClients La liste des clients
-    * @note Va fermer tous les sockets des clients et les supprimer de la liste des clients et les détruire
-*/
-void disconnet_all_clients(struct listeClients *listeClients){
-    int i;
-    for(i = 0; i < listeClients->nbClients; i++){
-        printf(LOG("EXIT", "Deconnexion du client [%s]\n"), listeClients->clients[i].name);
-        close(listeClients->clients[i].socket);
-        removeClientFromList(&listeClients->clients[i], listeClients);
-    }
+void error_report(struct client *client){
+    printf(LOG("CHANNEL", "La connexion avec le client [%s] a été perdue, on le déconnecte\n"), client->name);
+    char *message = allouer_chaine_dynamique(strlen(client->name)+strlen("Le client [] s'est déconnecté")+1);
+    snprintf(message, strlen(client->name)+strlen("Le client [] s'est déconnecté")+1, "Le client [%s] s'est déconnecté", client->name);
+    client_disconnect(client, client->channel->listeClients);
+    sendToAllClientsInChannel("SERVEUR", message, client->channel->listeClients);
+    free(message); // On a plus besoin de cette variable donc on la libère
 }
-
-
-
-
 
 

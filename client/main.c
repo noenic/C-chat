@@ -12,7 +12,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <time.h>
-#include "helper.h"
+#include "includes/helper.h"
 
 #define HUB 200
 #define CHANNEL 201
@@ -23,27 +23,30 @@ struct sockaddr_in server;
 
 int main(int argc, char *argv[])
 {
- 
+
     struct hostent *hp;
     int sock;
     sock = socket(AF_INET, SOCK_STREAM, 0);
     hp = gethostbyname("localhost");
     server.sin_family = AF_INET;
     server.sin_addr=*((struct in_addr *)hp->h_addr);
-    server.sin_port = htons(atoi(argv[1]));
+    if (argc != 2)
+    {
+        server.sin_port = htons(8000);
+    }
+    else{
+        server.sin_port = htons(atoi(argv[1]));
+    }
     connect(sock, (struct sockaddr *)&server, sizeof(server));
     int serverType;
     read(sock, &serverType, sizeof(int));
     // Si on est connecté au HUB il faut choisir un channel
     if(serverType == HUB){
+        // Si on est connecté au HUB il faut choisir un channel
+        // la fonction handleHUB retourne le port du channel
         int port = handleHUB(sock);
         // On se connecte au channel
         sock = socket(AF_INET, SOCK_STREAM, 0);
-        struct sockaddr_in server;
-        struct hostent *hp;
-        hp = gethostbyname("localhost");
-        server.sin_family = AF_INET;
-        server.sin_addr=*((struct in_addr *)hp->h_addr);
         server.sin_port = htons(port);
         connect(sock, (struct sockaddr *)&server, sizeof(server));
         read(sock, &serverType, sizeof(int));
@@ -116,7 +119,7 @@ int handleHUB(int sock){
     write(sock, choice, sizeChoice); // On envoie le choix du client au serveur
     free(choice); // On libère la mémoire de la variable choice
 
-    // // On attend que le serveur nous envoie le port du channel
+    //  On attend que le serveur nous envoie le port du channel
     int port;
     read(sock, &port, sizeof(int));
     printf("Port du channel: %d\n", port);
@@ -128,98 +131,117 @@ int handleHUB(int sock){
 int handleCHANNEL(int sock){
     printf("Vous êtes connecté au channel...\n");
     //  On lui envoie la taille du pseudo pour qu'il puisse allouer la mémoire
-    size_t sizePseudo;
+    size_t *size = allouer_size_t_dynamique(0);
     printf("Entrez votre pseudo: ");
-    char *pseudo = get_line(&sizePseudo);
-    sizePseudo = strlen(pseudo)+1;
-    write(sock, &sizePseudo, sizeof(size_t));
-    write(sock, pseudo, sizePseudo);
+    char *pseudo = get_line(size);
+    write(sock, size, sizeof(size_t));
+    write(sock, pseudo, *size);
 
     // On attend que le serveur nous envoie un signal pour nous dire que le pseudo est valide (1 si valide, 0 sinon)
-    int validPseudo = 0;
+    int validPseudo = 1;
     read(sock, &validPseudo, sizeof(int));
-
-    printf("validPseudo: %d\n", validPseudo);
-    if (validPseudo == 0) {
+    if (validPseudo == 1) {
         printf("Pseudo invalide, il est probablement déjà utilisé\n");
         close(sock);
         exit(EXIT_FAILURE);
     }
 
     struct pollfd pollfds[2];
-    pollfds[0].fd = STDIN_FILENO;
+    pollfds[0].fd = sock;
     pollfds[0].events = POLLIN;
-    pollfds[1].fd = sock;
+    pollfds[1].fd = STDIN_FILENO;
     pollfds[1].events = POLLIN;
-    size_t sizeMessage;
-
+    time_t t;
+    struct tm *tm_info;
+    int return_code = 1; // 0 si le message est une commande, 1 si un message normal, 2 si le client veut quitter le channel
+    
+    printf("Vous êtes connecté au channel...\n");
+    // On attend un message du serveur sur l'historique des messages
+    read(sock, size, sizeof(size_t));
+    if (*size > 1) {
+        printf("Historique des derniers messages:\n");
+        char *message = allouer_chaine_dynamique(*size);
+        read(sock, message, *size);
+        printf("%s\n", message);
+        free(message);
+    }
+    printf("[--:--] [%s] : ", pseudo);
+    printf("\033[K");
+    fflush(stdout);
     while (1)
     {
-        fflush(stdout);
-        int ret = poll(pollfds, 2, 2);
-
+        int ret = poll(pollfds, 2, -1);
         if (ret == -1)
         {
             perror("poll");
             exit(EXIT_FAILURE);
         }
-
-        if (ret == 0)
-
+        if (pollfds[0].revents & POLLIN)
         {
-        
-            // Effacer la ligne précédente
-            printf("\033[2K");
-            // Revenir au début de la ligne
-            printf("\r");
-            // Obtenir la position actuelle du curseur
-            int cursorPosition = 0;
-            // ioctl(STDOUT_FILENO, TIOCGWINSZ, &cursorPosition);
-
-            char *message = get_line(&sizeMessage); 
-            // Envoyer la taille du message au serveur
-            size_t sizeMessage = strlen(message) + 1;
-            write(sock, &sizeMessage, sizeof(size_t));
-
-            // Envoyer le message au serveur
-            write(sock, message, sizeMessage);
-
-            // Revenir à la position initiale du curseur
-            printf("\033[%dD", cursorPosition);
-
-            if (strcmp(message, "/quit") == 0)
-            {
+            // On attend un message du serveur
+            if(read(sock, size, sizeof(size_t)) == 0){
+                printf("Le serveur a fermé la connexion\n");
+                free(size);
+                free(pseudo);
                 break;
             }
-        
-            
-        }
-
-        if (pollfds[1].revents & POLLIN) {
-
-            // Lire la taille du message
-            read(sock, &sizeMessage, sizeof(size_t));
-
-            // Allouer dynamiquement de la mémoire pour le message
-            char *receivedMessage = (char *)malloc(sizeMessage);
-            if (receivedMessage == NULL) {
-                perror("malloc");
-                exit(EXIT_FAILURE);
+   
+            char *message = allouer_chaine_dynamique(*size);
+            if(read(sock, message, *size) == 0){
+                printf("Le serveur a fermé la connexion\n");
+                free(message);
+                free(size);
+                free(pseudo);
+                break;
             }
+            // On revient au début de la ligne
+            printf("\r");
+            // On efface la ligne actuelle
+            printf("\033[K");
+            // On obtient l'heure actuelle
+            time(&t);
+            tm_info = localtime(&t);
+            // On affiche le message
+            // [HH:MM] message
+            printf("[%02d:%02d] %s\n", tm_info->tm_hour, tm_info->tm_min, message);
+            printf("[--:--] [%s] : ", pseudo);
+            printf("\033[K");
+            fflush(stdout);
 
-            // Lire le message
-            read(sock, receivedMessage, sizeMessage);
-            // On desactive l'event POLLIN pour ne pas recevoir le message qu'on vient d'envoyer
-            pollfds[1].events = 0;
-            printf("%s\n", receivedMessage);
 
+            free(message);
+        }
+        if (pollfds[1].revents & POLLIN)
+        {
+            
+            // On efface la ligne actuelle
+            char *message = get_line(size); 
 
-            // Libérer la mémoire allouée dynamiquement
-            free(receivedMessage);
-            // On reactive l'event POLLIN
-            pollfds[1].events = POLLIN;
+            return_code = is_not_command(message,sock); // On vérifie si le message est une commande, si oui elle sera exécutée dans la fonction
+
+            switch (return_code)
+            {
+                case 1:
+                    // On affiche le message
+                    printf("\033[1A\r"); // On revient au début de la ligne précédente pour changer l'heure
+                    time(&t);
+                    tm_info = localtime(&t);
+                    printf("[%02d:%02d]\n", tm_info->tm_hour, tm_info->tm_min);
+                    write(sock, size, sizeof(size_t));
+                    write(sock, message, *size);
+                    free(message);
+                    break;
+                case 2:
+                    free(size);
+                    free(message);
+                    free(pseudo);
+                    close(sock);
+                    exit(EXIT_SUCCESS);
+            }
+            // On clear le cache
+            printf("[--:--] [%s] : ", pseudo);
+            printf("\033[K");
+            fflush(stdout);
         }
     }
-
-    return 0;
 }

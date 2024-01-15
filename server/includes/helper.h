@@ -78,17 +78,4 @@ char* allouer_chaine_dynamique(int taille);
 char* reallocation_dynamique(char* chaine, int taille);
 
 
-
-
-
-
-
-
-
-char** allouer_tableau_chaines_dynamique(int nombre_de_chaines);
-void liberer_tableau_chaines(char** tableau, int nombre_de_chaines);
-
-
-
-
 #endif // HELPER_H

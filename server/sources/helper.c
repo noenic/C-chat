@@ -1,8 +1,8 @@
-#include "helper.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "channels.h"
+#include "../includes/channels.h"
+#include "../includes/helper.h"
 
 
 
@@ -73,3 +73,5 @@ char* reallocation_dynamique(char* chaine, int taille) {
     }
     return chaine_reallouee;
 }
+
+
