@@ -47,3 +47,4 @@ Exemple d'exécution du client avec un port spécifié :
 ## Choix d'implémentation
 
 - 💩 Pour le moment ça marche que pour `localhost` parce que c'est écrit en dur dans le `client/main.c` mais ca marche aussi pour les autres machines, il suffit de changer `localhost` par l'adresse IP de la machine qui héberge le serveur.
+- 💩 J'ai essayé de faire un CMake mais il marche pas, donc j'ai fait un script bash pour compiler et exécuter le programme.
