@@ -44,3 +44,6 @@ Exemple d'exécution du client avec un port spécifié :
 - ✔️ gestion des erreurs, des sockets, des signaux
 - ✔️ aucun bug (y'en a, mais on va dire que non, le projet est parfait)
 
+## Choix d'implémentation
+
+- 💩 Pour le moment ça marche que pour `localhost` parce que c'est écrit en dur dans le `client/main.c` mais ca marche aussi pour les autres machines, il suffit de changer `localhost` par l'adresse IP de la machine qui héberge le serveur.
