@@ -1,4 +1,4 @@
-# Chat en C avec serveur et clients
+# Chat en C avec serveur et clients (pour le rendu de projet de Programmation Système R5.A.05)
 
 Ce projet consiste en un chat en C avec un serveur et des clients. Le serveur gère plusieurs canaux sur des ports différents (générés aléatoirement). Par défaut, le serveur utilise le port 8080 pour le hub.
 
